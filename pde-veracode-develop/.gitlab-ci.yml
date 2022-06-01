@@ -1,0 +1,67 @@
+stages:
+  - build
+
+before_script:
+  - type docker >/dev/null 2>&1 && docker login -u gitlab-ci-token -p $CI_JOB_TOKEN panamax.spectrumxg.com || { echo >&2 "Docker not installed"; }
+  - type docker >/dev/null 2>&1 && docker login -u ${ARTIFACTORY_EMAIL} -p ${ARTIFACTORY_API_KEY} docker-artifactory.spectrumflow.net
+
+variables:
+  DOCKER_CDN: docker-artifactory.spectrumflow.net/docker
+  CI_REGISTRY_IMAGE: ${DOCKER_CDN}/pde-veracode
+
+### Build IMAGE
+build_dev_image:
+  image: ${DOCKER_CDN}/docker:latest
+  stage: build
+  tags:
+    - docker
+  script:
+    - docker build -t ${CI_REGISTRY_IMAGE}:develop .
+      --build-arg DOCKER_CDN=${DOCKER_CDN}
+      --build-arg VERACODE_API_KEY_ID=${VERACODE_API_KEY_ID}
+      --build-arg VERACODE_API_KEY_SECRET=${VERACODE_API_KEY_SECRET}
+      --build-arg SENDER_SMTP=${DEFAULT_SMTP_SENDER}
+      --build-arg SENDER_NAME_SMTP=${DEFAULT_SMTP_SENDER_NAME}
+      --build-arg USERNAME_SMTP=${DEFAULT_SMTP_USERNAME}
+      --build-arg PASSWORD_SMTP=${DEFAULT_SMTP_PASSWORD}
+      --build-arg HOST_SMTP=${DEFAULT_SMTP_HOST}
+      --build-arg ARTIFACTORY_API_KEY=${ARTIFACTORY_API_KEY}
+      --build-arg ARTIFACTORY_EMAIL=${ARTIFACTORY_EMAIL}
+      --build-arg VERACODE_ID=${VERACODE_ID}
+      --build-arg VERACODE_KEY=${VERACODE_KEY}
+      --build-arg VERACODE_WRAPPER_VERSION=${VERACODE_WRAPPER_VERSION}
+      --build-arg VERACODE_BOT_TOKEN=${VERACODE_BOT_TOKEN}
+      --build-arg GITLAB_HOST_URL=${GITLAB_HOST_URL}
+      --build-arg GITLAB_PRIVATE_TOKEN=${GITLAB_PRIVATE_TOKEN}
+
+    - docker push ${CI_REGISTRY_IMAGE}:develop
+  only:
+    - develop
+
+build_prod_image:
+  image: ${DOCKER_CDN}/docker:latest
+  stage: build
+  tags:
+    - docker
+  script:
+    - docker build -t ${CI_REGISTRY_IMAGE}:latest .
+      --build-arg DOCKER_CDN=${DOCKER_CDN}
+      --build-arg VERACODE_API_KEY_ID=${VERACODE_API_KEY_ID}
+      --build-arg VERACODE_API_KEY_SECRET=${VERACODE_API_KEY_SECRET}
+      --build-arg SENDER_SMTP=${DEFAULT_SMTP_SENDER}
+      --build-arg SENDER_NAME_SMTP=${DEFAULT_SMTP_SENDER_NAME}
+      --build-arg USERNAME_SMTP=${DEFAULT_SMTP_USERNAME}
+      --build-arg PASSWORD_SMTP=${DEFAULT_SMTP_PASSWORD}
+      --build-arg HOST_SMTP=${DEFAULT_SMTP_HOST}
+      --build-arg ARTIFACTORY_API_KEY=${ARTIFACTORY_API_KEY}
+      --build-arg ARTIFACTORY_EMAIL=${ARTIFACTORY_EMAIL}
+      --build-arg VERACODE_ID=${VERACODE_ID}
+      --build-arg VERACODE_KEY=${VERACODE_KEY}
+      --build-arg VERACODE_WRAPPER_VERSION=${VERACODE_WRAPPER_VERSION}
+      --build-arg VERACODE_BOT_TOKEN=${VERACODE_BOT_TOKEN}
+      --build-arg GITLAB_HOST_URL=${GITLAB_HOST_URL}
+      --build-arg GITLAB_PRIVATE_TOKEN=${GITLAB_PRIVATE_TOKEN}
+
+    - docker push ${CI_REGISTRY_IMAGE}:latest
+  only:
+    - master
