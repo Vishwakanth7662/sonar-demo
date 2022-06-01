@@ -1,0 +1,122 @@
+#!/bin/bash
+
+echo "Welcome to Veracode Scan!! Running Veracode scan step now"
+
+# Fixed env variables from customers
+export CI_JOB_ID=${CI_JOB_ID}
+export CI_PIPELINE_ID=${CI_PIPELINE_ID}
+export VERACODE_APP_NAME=${VERACODE_APP_NAME}
+export VERACODE_TYPE=${VERACODE_TYPE}
+export VERACODE_MULTI_APPS_NAMES=${VERACODE_MULTI_APPS_NAMES}
+
+if [[ $VERACODE_APP_NAME != "" ]]; then
+	echo "VERACODE_APP_NAME is $VERACODE_APP_NAME"
+else
+	echo "Error!: VERACODE_APP_NAME environment variable is empty!"
+	echo "Please request new application access from Sumalya Guha in SecOps team alone with your first name, last name, and your Charter email address!"
+	exit 1
+fi
+
+#### Check if customer has set custom version
+usage() { echo "Usage: $0 [-v <string>]" 1>&2; exit 1; }
+while getopts ":v:s:" o; do
+    case "${o}" in
+        v)
+            export APP_VERSION=${OPTARG}
+            ;;
+		s)
+			export VERACODE_SANDBOXNAMES=${OPTARG}
+			;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+#######################################################################################################
+# Custom env variables
+export VERACODE_SCRIPTS_PATH="/veracode/scripts"
+export VERACODE_DETECTION_PATH="/veracode/detection"
+export CLIENT_VERACODE_PKG_SCRIPT_FILE_NAME="veracode.sh"
+export NODE_MODULES="node_modules"
+
+
+# Perform each team/project requirement before build the project(s)
+echo "Run each team's requirement first..."
+. ${VERACODE_SCRIPTS_PATH}/team_requirements.sh
+
+### This will stop the CI job exit out while it's scanning until all processes have been donw
+export PIDS=""
+
+
+# Mono repo 
+if [[ -n "${VERACODE_MONO_REPO_TYPE}" ]]; then
+	export MULTI_APPS_ARRAY=(`echo ${VERACODE_MULTI_APPS_NAMES} | tr '_' ' '`)
+
+	if [ -n ${VERACODE_SANDBOXNAMES} ]; then
+		export VERACODE_SANDBOXNAMES_ARRAY=(`echo ${VERACODE_SANDBOXNAMES} | tr ',' ' '`)
+	fi
+
+	if [[ "${VERACODE_MONO_REPO_TYPE}" == "waterfall" ]]; then
+		if [[ -z "${VERACODE_MULTI_APPS_NAMES}" ]] || [[ -z "${VERACODE_MULTI_APPS_VERSION}" ]]; then
+			echo "VERACODE_MULTI_APPS_NAMES or VERACODE_MULTI_APPS_VERSION is not set"
+			exit 1
+		fi
+		export VERACODE_TYPE_ARRAY=(`echo ${VERACODE_MULTI_APPS_VERSION} | tr ',' ' '`)
+
+		echo ""
+		echo "MULTI_APPS_ARRAY length: ${#MULTI_APPS_ARRAY[@]}"
+		echo "VERACODE_TYPE_ARRAY length: ${#VERACODE_TYPE_ARRAY[@]}"
+		echo ""
+
+		if [[ ${#VERACODE_TYPE_ARRAY[@]} != ${#MULTI_APPS_ARRAY[@]} ]]; then
+			echo "VERACODE_MULTI_APPS_NAMES length not equal as VERACODE_MULTI_APPS_VERSION"
+			exit 1
+		fi
+		. ${VERACODE_SCRIPTS_PATH}/waterfall_mono_repo.sh
+	fi
+
+	if [[ "${VERACODE_MONO_REPO_TYPE}" == "overall" ]]; then
+		if [[ -z "${VERACODE_MONO_REPO_ENTRY}" ]]; then
+			echo "There is no entry point set, please set VERACODE_MONO_REPO_ENTRY as env variable."
+			exit 1
+		fi
+
+		export VERACODE_TYPE_ARRAY=(`echo ${VERACODE_TYPE} | tr '_' ' '`)
+
+		. ${VERACODE_SCRIPTS_PATH}/overall_mono_repo.sh
+	fi
+
+else
+
+	if [[ "$VERACODE_TYPE" == *"MAVEN"* ]]; then
+		export VERACODE_FILE_NAME="veracode.war"
+	elif [[ "$VERACODE_TYPE" == *"GRADLE"* ]]; then
+        export VERACODE_FILE_NAME="veracode.jar"
+	elif [[ "$VERACODE_TYPE" == *"NODEJS"* ]]; then
+		export VERACODE_FILE_NAME="veracode.zip"
+	elif [[ "$VERACODE_TYPE" == *"PYTHON"* ]]; then
+		export VERACODE_FILE_NAME="veracode.zip"
+	elif [[ "$VERACODE_TYPE" == *"PHP"* ]]; then
+		export VERACODE_FILE_NAME="veracode.zip"
+	fi
+
+	echo "Your VERACODE_FILE_NAME is $VERACODE_FILE_NAME"
+	echo "VERACODE_TYPE: $VERACODE_TYPE"
+
+	# Distinguish client application information and save into array
+	## example: NODEJS_10.22_REACT_16_NPM
+	# ${VERACODE_TYPE_ARRAY[0]} : Programming language              Example: NODEJS
+	# ${VERACODE_TYPE_ARRAY[1]} : Programming language version      Example: 10.22
+	# ${VERACODE_TYPE_ARRAY[2]} : Framework      					Example: EXPRESS
+	# ${VERACODE_TYPE_ARRAY[3]} : Framework version      			Example: 5.2
+	# ${VERACODE_TYPE_ARRAY[4]} : Package manager                   Example: YARN
+	if [[ "${VERACODE_TYPE}" != "" ]]; then
+		export VERACODE_TYPE_ARRAY=(`echo ${VERACODE_TYPE} | tr '_' ' '`)
+	fi
+
+	#### Single app
+	echo "It's single app.... run single_app"
+	. ${VERACODE_SCRIPTS_PATH}/single_app.sh
+fi
